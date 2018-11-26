@@ -7,13 +7,14 @@ const String window_capture_name = "Source RGB Video";
 const String window_detection_name = "Object Detection";
 const String window_gauss_name = "Gaussian Blur";
 const String window_canny_name = "Canny Edge Detection";
-const String window_contour_name = "Contour Detection"
+const String window_contour_name = "Contour Detection";
 
 //-------HSV Variables --------//
-int low_H = 160, low_S = 0, low_V = 160;
-int high_H = max_value_H, high_S = max_value, high_V = max_value;
 const int max_value_H = 360/2;
 const int max_value = 255;
+int low_H = 160, low_S = 0, low_V = 160;
+int high_H = max_value_H, high_S = max_value, high_V = max_value;
+
 
 //-------Gaussian Blur variables ------//
 int gauss_blur = 9, max_gauss = 9;
@@ -25,6 +26,10 @@ int const canny_max_low_threshold = 100;
 // --------Contour detection variables -----//
 int contour_points = 4;
 int const contour_max_points = 20;
+std::vector <std::vector<Point> > contours;
+std::vector <Vec4i> hierarchy;
+RNG rng(12345);
+
 
 // ------- Trackbars -------//
 static void on_low_H_thresh_trackbar(int, void *)
@@ -74,6 +79,16 @@ static void contour_points_trackbar(int, void*)
     setTrackbarPos("Points", window_contour_name, contour_points);
 }
 
+std::vector<Point> contoursConvexHull( std::vector<std::vector<Point> > contours )
+{
+    std::vector<Point> result;
+    std::vector<Point> pts;
+    for ( size_t i = 0; i< contours.size(); i++)
+        for ( size_t j = 0; j< contours[i].size(); j++)
+            pts.push_back(contours[i][j]);
+    convexHull( pts, result );
+    return result;
+}
 
 
 int main(int argc, char* argv[])
@@ -109,11 +124,26 @@ int main(int argc, char* argv[])
         cvtColor(frame_blur, frame_HSV, COLOR_BGR2HSV);
         // Detect the object based on HSV Range Values
         inRange(frame_HSV, Scalar(low_H, low_S, low_V), Scalar(high_H, high_S, high_V), frame_threshold);
+
+        //Erode and then dilate (close)
+
         // Applying Canny edge Detect on the Image
         Canny(frame_threshold, frame_edges, canny_low, canny_low*canny_ratio, canny_kernel_size);
 
-        findContours(frame_edges, contours, RETR_TREE, CHAIN_APPROX_SIMPLE);
+        findContours(frame_edges, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
 
+        Mat drawing = Mat::zeros(frame_edges.size(), CV_8UC3);
+
+        for (int i = 0; i< contours.size(); i++)
+        {
+            Scalar color = Scalar( 255,255,255);
+            drawContours( drawing, contours, i, color, 1 );
+        }
+
+        std::vector <Point> ConvexHullPoints =  contoursConvexHull(contours);
+
+        polylines( drawing, ConvexHullPoints, true, Scalar(0,0,255), 2 );
+        imshow("Contours", drawing);
         // Show the frames
         imshow(window_capture_name, frame);
         imshow(window_gauss_name, frame_blur);
